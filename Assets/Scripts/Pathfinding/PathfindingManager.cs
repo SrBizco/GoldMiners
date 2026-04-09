@@ -223,4 +223,18 @@ public class PathfindingManager : MonoBehaviour
             }
         }
     }
+    public void ResetNodeStates()
+    {
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            if (nodes[i].CurrentState == PathNodeState.Blocked)
+            {
+                continue;
+            }
+
+            nodes[i].CurrentState = PathNodeState.Pending;
+            nodes[i].AccumulatedCost = 0f;
+            nodes[i].Parent = null;
+        }
+    }
 }
