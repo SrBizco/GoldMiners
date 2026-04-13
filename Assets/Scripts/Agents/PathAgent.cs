@@ -13,6 +13,7 @@ public class PathAgent : MonoBehaviour
 
     [Header("Debug")]
     [SerializeField] private bool drawCurrentPath = true;
+    [SerializeField] private bool logRecalculation = false;
 
     private List<PathNode> currentPath = new List<PathNode>();
     private int currentPathIndex;
@@ -23,12 +24,53 @@ public class PathAgent : MonoBehaviour
     public bool HasDestination => hasDestination;
     public Vector3 CurrentWorldDestination => currentWorldDestination;
 
+    public PathfindingStrategyType CurrentStrategy => pathfindingManager != null
+        ? pathfindingManager.CurrentStrategy
+        : PathfindingStrategyType.BreadthFirst;
+
+    private void OnEnable()
+    {
+        if (pathfindingManager != null)
+        {
+            pathfindingManager.StrategyChanged += OnStrategyChanged;
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (pathfindingManager != null)
+        {
+            pathfindingManager.StrategyChanged -= OnStrategyChanged;
+        }
+    }
+
     private void Update()
     {
         MoveAlongPath();
     }
 
     public void SetDestination(Vector3 worldDestination)
+    {
+        currentWorldDestination = worldDestination;
+        RecalculatePathToCurrentDestination();
+    }
+
+    private void OnStrategyChanged(PathfindingStrategyType newStrategy)
+    {
+        if (!hasDestination || HasReachedDestination)
+        {
+            return;
+        }
+
+        RecalculatePathToCurrentDestination();
+
+        if (logRecalculation)
+        {
+            Debug.Log($"[{name}] Path recalculated using {newStrategy}");
+        }
+    }
+
+    public void RecalculatePathToCurrentDestination()
     {
         if (pathfindingManager == null)
         {
@@ -37,7 +79,7 @@ public class PathAgent : MonoBehaviour
         }
 
         PathNode startNode = pathfindingManager.GetClosestNode(transform.position);
-        PathNode targetNode = pathfindingManager.GetClosestNode(worldDestination);
+        PathNode targetNode = pathfindingManager.GetClosestNode(currentWorldDestination);
 
         if (startNode == null || targetNode == null)
         {
@@ -45,11 +87,11 @@ public class PathAgent : MonoBehaviour
             return;
         }
 
-        List<PathNode> newPath = BreadthFirstPathfinding.CreatePath(startNode, targetNode);
+        List<PathNode> newPath = pathfindingManager.CreatePath(startNode, targetNode);
 
         if (newPath == null || newPath.Count == 0)
         {
-            Debug.LogWarning("[PathAgent] No valid path found.");
+            Debug.LogWarning($"[PathAgent] No valid path found using {CurrentStrategy}.");
             currentPath.Clear();
             currentPathIndex = 0;
             hasDestination = false;
@@ -61,7 +103,6 @@ public class PathAgent : MonoBehaviour
         currentPathIndex = 0;
         hasDestination = true;
         HasReachedDestination = false;
-        currentWorldDestination = worldDestination;
 
         if (currentPath.Count > 0)
         {
@@ -69,6 +110,12 @@ public class PathAgent : MonoBehaviour
             {
                 currentPathIndex = 1;
             }
+        }
+
+        if (currentPathIndex >= currentPath.Count)
+        {
+            HasReachedDestination = true;
+            hasDestination = false;
         }
     }
 

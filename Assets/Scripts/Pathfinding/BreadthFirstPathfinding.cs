@@ -1,9 +1,8 @@
 using System.Collections.Generic;
-using System.Linq;
 
-public static class BreadthFirstPathfinding
+public class BreadthFirstPathfinding : IPathfindingStrategy
 {
-    public static List<PathNode> CreatePath(PathNode startNode, PathNode targetNode)
+    public List<PathNode> CreatePath(PathNode startNode, PathNode targetNode, IReadOnlyList<PathNode> allNodes)
     {
         List<PathNode> emptyPath = new List<PathNode>();
 
@@ -17,9 +16,10 @@ public static class BreadthFirstPathfinding
             return new List<PathNode> { startNode };
         }
 
+        PathfindingUtils.ResetNodes(allNodes, startNode);
+
         Queue<PathNode> nodesToVisit = new Queue<PathNode>();
         HashSet<PathNode> visitedNodes = new HashSet<PathNode>();
-        Dictionary<PathNode, PathNode> previousNodes = new Dictionary<PathNode, PathNode>();
 
         nodesToVisit.Enqueue(startNode);
         visitedNodes.Add(startNode);
@@ -27,10 +27,11 @@ public static class BreadthFirstPathfinding
         while (nodesToVisit.Count > 0)
         {
             PathNode currentNode = nodesToVisit.Dequeue();
+            currentNode.CurrentState = PathNodeState.Closed;
 
             if (currentNode == targetNode)
             {
-                return ReconstructPath(startNode, targetNode, previousNodes);
+                return PathfindingUtils.ReconstructPath(startNode, targetNode);
             }
 
             for (int i = 0; i < currentNode.AdjacentNodes.Count; i++)
@@ -53,38 +54,12 @@ public static class BreadthFirstPathfinding
                 }
 
                 visitedNodes.Add(adjacentNode);
-                previousNodes[adjacentNode] = currentNode;
+                adjacentNode.Parent = currentNode;
+                adjacentNode.CurrentState = PathNodeState.Open;
                 nodesToVisit.Enqueue(adjacentNode);
             }
         }
 
         return emptyPath;
-    }
-
-    private static List<PathNode> ReconstructPath(
-        PathNode startNode,
-        PathNode targetNode,
-        Dictionary<PathNode, PathNode> previousNodes)
-    {
-        List<PathNode> path = new List<PathNode>();
-        PathNode currentNode = targetNode;
-
-        while (currentNode != null)
-        {
-            path.Add(currentNode);
-
-            if (currentNode == startNode)
-            {
-                break;
-            }
-
-            if (!previousNodes.TryGetValue(currentNode, out currentNode))
-            {
-                return new List<PathNode>();
-            }
-        }
-
-        path.Reverse();
-        return path;
     }
 }

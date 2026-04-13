@@ -13,6 +13,9 @@ public class MinerController : MonoBehaviour
     [SerializeField] private float miningInterval = 1f;
     [SerializeField] private float depositInterval = 0.5f;
 
+    [Header("UI")]
+    [SerializeField] private string displayName = "Miner";
+
     [Header("Debug")]
     [SerializeField] private bool logStateChanges = true;
 
@@ -34,6 +37,7 @@ public class MinerController : MonoBehaviour
 
     public int CarriedGold => carriedGold;
     public int CarryCapacity => carryCapacity;
+    public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? name : displayName;
 
     public bool HasCarriedGold => carriedGold > 0;
     public bool IsCarryFull => carriedGold >= carryCapacity;

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -19,6 +20,9 @@ public class PathfindingManager : MonoBehaviour
     [Header("Terrain Costs")]
     [SerializeField] private List<TerrainLayerData> terrainLayers = new List<TerrainLayerData>();
 
+    [Header("Pathfinding")]
+    [SerializeField] private PathfindingStrategyType currentStrategy = PathfindingStrategyType.BreadthFirst;
+
     [Header("Debug")]
     [SerializeField] private bool generateOnStart = true;
     [SerializeField] private bool drawNodeSpheres = true;
@@ -28,7 +32,10 @@ public class PathfindingManager : MonoBehaviour
 
     private readonly List<PathNode> nodes = new List<PathNode>();
 
+    public event Action<PathfindingStrategyType> StrategyChanged;
+
     public IReadOnlyList<PathNode> Nodes => nodes;
+    public PathfindingStrategyType CurrentStrategy => currentStrategy;
 
     private void Start()
     {
@@ -66,7 +73,6 @@ public class PathfindingManager : MonoBehaviour
                 }
 
                 Vector3 nodePosition = hitInfo.point + Vector3.up * 0.05f;
-
                 bool isBlocked = Physics.CheckSphere(nodePosition, obstacleCheckRadius, obstacleLayerMask);
 
                 if (isBlocked)
@@ -90,6 +96,44 @@ public class PathfindingManager : MonoBehaviour
         ConnectAdjacentNodes();
 
         Debug.Log($"[PathfindingManager] Nodes generated: {nodes.Count}");
+    }
+
+    public void SetPathfindingStrategy(PathfindingStrategyType strategyType)
+    {
+        if (currentStrategy == strategyType)
+        {
+            return;
+        }
+
+        currentStrategy = strategyType;
+        Debug.Log($"[PathfindingManager] Strategy changed to: {currentStrategy}");
+        StrategyChanged?.Invoke(currentStrategy);
+    }
+
+    public void SetDepthFirstStrategy()
+    {
+        SetPathfindingStrategy(PathfindingStrategyType.DepthFirst);
+    }
+
+    public void SetBreadthFirstStrategy()
+    {
+        SetPathfindingStrategy(PathfindingStrategyType.BreadthFirst);
+    }
+
+    public void SetDijkstraStrategy()
+    {
+        SetPathfindingStrategy(PathfindingStrategyType.Dijkstra);
+    }
+
+    public void SetAStarStrategy()
+    {
+        SetPathfindingStrategy(PathfindingStrategyType.AStar);
+    }
+
+    public List<PathNode> CreatePath(PathNode startNode, PathNode targetNode)
+    {
+        IPathfindingStrategy strategy = PathfindingStrategyFactory.GetStrategy(currentStrategy);
+        return strategy.CreatePath(startNode, targetNode, nodes);
     }
 
     private float GetTerrainCost(string terrainTag)
@@ -170,6 +214,21 @@ public class PathfindingManager : MonoBehaviour
         return closestNode;
     }
 
+    public void ResetNodeStates()
+    {
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            if (nodes[i].CurrentState == PathNodeState.Blocked)
+            {
+                continue;
+            }
+
+            nodes[i].CurrentState = PathNodeState.Pending;
+            nodes[i].AccumulatedCost = 0f;
+            nodes[i].Parent = null;
+        }
+    }
+
     private void OnDrawGizmos()
     {
         if (nodes == null || nodes.Count == 0)
@@ -221,20 +280,6 @@ public class PathfindingManager : MonoBehaviour
 
                 Gizmos.DrawSphere(node.Position, gizmoSphereRadius);
             }
-        }
-    }
-    public void ResetNodeStates()
-    {
-        for (int i = 0; i < nodes.Count; i++)
-        {
-            if (nodes[i].CurrentState == PathNodeState.Blocked)
-            {
-                continue;
-            }
-
-            nodes[i].CurrentState = PathNodeState.Pending;
-            nodes[i].AccumulatedCost = 0f;
-            nodes[i].Parent = null;
         }
     }
 }
