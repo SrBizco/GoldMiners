@@ -2,15 +2,6 @@ using UnityEngine;
 
 public class MinerController : MonoBehaviour
 {
-    private enum MinerState
-    {
-        Idle,
-        GoingToMine,
-        Mining,
-        ReturningToBase,
-        Depositing
-    }
-
     [Header("References")]
     [SerializeField] private PathAgent pathAgent;
     [SerializeField] private BaseStorage baseStorage;
@@ -25,196 +16,88 @@ public class MinerController : MonoBehaviour
     [Header("Debug")]
     [SerializeField] private bool logStateChanges = true;
 
-    private MinerState currentState = MinerState.Idle;
+    private FiniteStateMachine<MinerController> fsm;
+
+    private MinerIdleState idleState;
+    private MinerGoToMineState goToMineState;
+    private MinerMiningState miningState;
+    private MinerReturnToBaseState returnToBaseState;
+    private MinerDepositingState depositingState;
+
     private GoldVein currentTargetVein;
     private int carriedGold;
-    private float stateTimer;
+    private float actionTimer;
+
+    public PathAgent PathAgent => pathAgent;
+    public BaseStorage BaseStorage => baseStorage;
+    public GoldVein CurrentTargetVein => currentTargetVein;
 
     public int CarriedGold => carriedGold;
     public int CarryCapacity => carryCapacity;
-    public GoldVein CurrentTargetVein => currentTargetVein;
 
-    private void Start()
+    public bool HasCarriedGold => carriedGold > 0;
+    public bool IsCarryFull => carriedGold >= carryCapacity;
+
+    public MinerIdleState IdleState => idleState;
+    public MinerGoToMineState GoToMineState => goToMineState;
+    public MinerMiningState MiningState => miningState;
+    public MinerReturnToBaseState ReturnToBaseState => returnToBaseState;
+    public MinerDepositingState DepositingState => depositingState;
+
+    private void Awake()
     {
-        ChangeState(MinerState.Idle);
+        InitializeStates();
     }
 
     private void Update()
     {
-        switch (currentState)
-        {
-            case MinerState.Idle:
-                UpdateIdle();
-                break;
-
-            case MinerState.GoingToMine:
-                UpdateGoingToMine();
-                break;
-
-            case MinerState.Mining:
-                UpdateMining();
-                break;
-
-            case MinerState.ReturningToBase:
-                UpdateReturningToBase();
-                break;
-
-            case MinerState.Depositing:
-                UpdateDepositing();
-                break;
-        }
+        fsm?.Update();
     }
 
-    private void UpdateIdle()
+    private void OnDisable()
     {
-        if (carriedGold >= carryCapacity)
-        {
-            GoToBase();
-            return;
-        }
-
-        GoldVein bestVein = FindBestAvailableVein();
-
-        if (bestVein == null)
-        {
-            return;
-        }
-
-        if (!bestVein.TryReserve(this))
-        {
-            return;
-        }
-
-        currentTargetVein = bestVein;
-        pathAgent.SetDestination(currentTargetVein.transform.position);
-        ChangeState(MinerState.GoingToMine);
+        ReleaseReservationIfNeeded();
     }
 
-    private void UpdateGoingToMine()
+    private void OnDestroy()
     {
-        if (currentTargetVein == null)
-        {
-            ChangeState(MinerState.Idle);
-            return;
-        }
-
-        if (!currentTargetVein.HasGold)
-        {
-            currentTargetVein.ReleaseReservation(this);
-            currentTargetVein = null;
-            ChangeState(MinerState.Idle);
-            return;
-        }
-
-        float distanceToVein = Vector3.Distance(transform.position, currentTargetVein.transform.position);
-
-        if (distanceToVein <= interactionDistance || pathAgent.HasReachedDestination)
-        {
-            ChangeState(MinerState.Mining);
-        }
+        ReleaseReservationIfNeeded();
     }
 
-    private void UpdateMining()
+    private void InitializeStates()
     {
-        if (currentTargetVein == null)
-        {
-            ChangeState(MinerState.Idle);
-            return;
-        }
+        idleState = new MinerIdleState();
+        goToMineState = new MinerGoToMineState();
+        miningState = new MinerMiningState();
+        returnToBaseState = new MinerReturnToBaseState();
+        depositingState = new MinerDepositingState();
 
-        if (!currentTargetVein.HasGold)
-        {
-            currentTargetVein.ReleaseReservation(this);
-            currentTargetVein = null;
+        idleState.Initialize(this);
+        goToMineState.Initialize(this);
+        miningState.Initialize(this);
+        returnToBaseState.Initialize(this);
+        depositingState.Initialize(this);
 
-            if (carriedGold > 0)
-            {
-                GoToBase();
-            }
-            else
-            {
-                ChangeState(MinerState.Idle);
-            }
-
-            return;
-        }
-
-        if (carriedGold >= carryCapacity)
-        {
-            currentTargetVein.ReleaseReservation(this);
-            currentTargetVein = null;
-            GoToBase();
-            return;
-        }
-
-        stateTimer += Time.deltaTime;
-
-        if (stateTimer < miningInterval)
-        {
-            return;
-        }
-
-        stateTimer = 0f;
-
-        int missingCapacity = carryCapacity - carriedGold;
-        int extractedAmount = currentTargetVein.ExtractGold(Mathf.Min(1, missingCapacity));
-
-        if (extractedAmount > 0)
-        {
-            carriedGold += extractedAmount;
-        }
-
-        if (carriedGold >= carryCapacity || !currentTargetVein.HasGold)
-        {
-            currentTargetVein.ReleaseReservation(this);
-            currentTargetVein = null;
-            GoToBase();
-        }
+        fsm = new FiniteStateMachine<MinerController>();
+        fsm.SetInitialState(idleState);
     }
 
-    private void UpdateReturningToBase()
+    public void ChangeState(MinerStateBase newState)
     {
-        if (baseStorage == null)
-        {
-            return;
-        }
-
-        float distanceToBase = Vector3.Distance(transform.position, baseStorage.transform.position);
-
-        if (distanceToBase <= interactionDistance || pathAgent.HasReachedDestination)
-        {
-            ChangeState(MinerState.Depositing);
-        }
+        fsm.ChangeState(newState);
     }
 
-    private void UpdateDepositing()
+    public void NotifyStateEntered(string stateName)
     {
-        if (carriedGold <= 0)
-        {
-            ChangeState(MinerState.Idle);
-            return;
-        }
-
-        stateTimer += Time.deltaTime;
-
-        if (stateTimer < depositInterval)
+        if (!logStateChanges)
         {
             return;
         }
 
-        stateTimer = 0f;
-
-        carriedGold -= 1;
-        baseStorage.DepositGold(1);
-
-        if (carriedGold <= 0)
-        {
-            carriedGold = 0;
-            ChangeState(MinerState.Idle);
-        }
+        Debug.Log($"[{name}] State changed to: {stateName}");
     }
 
-    private GoldVein FindBestAvailableVein()
+    public GoldVein FindBestAvailableVein()
     {
         GoldVein bestVein = null;
         float bestDistance = float.MaxValue;
@@ -250,7 +133,43 @@ public class MinerController : MonoBehaviour
         return bestVein;
     }
 
-    private void GoToBase()
+    public void SetCurrentTargetVein(GoldVein vein)
+    {
+        currentTargetVein = vein;
+    }
+
+    public void ClearCurrentTargetVein()
+    {
+        if (currentTargetVein != null)
+        {
+            currentTargetVein.ReleaseReservation(this);
+            currentTargetVein = null;
+        }
+    }
+
+    public bool HasReachedCurrentVein()
+    {
+        if (currentTargetVein == null)
+        {
+            return false;
+        }
+
+        float distanceToVein = Vector3.Distance(transform.position, currentTargetVein.transform.position);
+        return distanceToVein <= interactionDistance || pathAgent.HasReachedDestination;
+    }
+
+    public bool HasReachedBase()
+    {
+        if (baseStorage == null)
+        {
+            return false;
+        }
+
+        float distanceToBase = Vector3.Distance(transform.position, baseStorage.transform.position);
+        return distanceToBase <= interactionDistance || pathAgent.HasReachedDestination;
+    }
+
+    public void GoToBase()
     {
         if (baseStorage == null)
         {
@@ -258,17 +177,75 @@ public class MinerController : MonoBehaviour
         }
 
         pathAgent.SetDestination(baseStorage.transform.position);
-        ChangeState(MinerState.ReturningToBase);
     }
 
-    private void ChangeState(MinerState newState)
+    public void TryMineOneUnit()
     {
-        currentState = newState;
-        stateTimer = 0f;
-
-        if (logStateChanges)
+        if (currentTargetVein == null)
         {
-            Debug.Log($"[{name}] State changed to: {currentState}");
+            return;
+        }
+
+        if (IsCarryFull)
+        {
+            return;
+        }
+
+        int missingCapacity = carryCapacity - carriedGold;
+        int extractedAmount = currentTargetVein.ExtractGold(Mathf.Min(1, missingCapacity));
+
+        if (extractedAmount > 0)
+        {
+            carriedGold += extractedAmount;
+        }
+    }
+
+    public void DepositOneUnitToBase()
+    {
+        if (baseStorage == null)
+        {
+            return;
+        }
+
+        if (carriedGold <= 0)
+        {
+            return;
+        }
+
+        carriedGold -= 1;
+        baseStorage.DepositGold(1);
+
+        if (carriedGold < 0)
+        {
+            carriedGold = 0;
+        }
+    }
+
+    public void AddToActionTimer()
+    {
+        actionTimer += Time.deltaTime;
+    }
+
+    public void ResetActionTimer()
+    {
+        actionTimer = 0f;
+    }
+
+    public bool HasReachedMiningInterval()
+    {
+        return actionTimer >= miningInterval;
+    }
+
+    public bool HasReachedDepositInterval()
+    {
+        return actionTimer >= depositInterval;
+    }
+
+    private void ReleaseReservationIfNeeded()
+    {
+        if (currentTargetVein != null)
+        {
+            currentTargetVein.ReleaseReservation(this);
         }
     }
 
@@ -277,7 +254,10 @@ public class MinerController : MonoBehaviour
         if (currentTargetVein != null)
         {
             Gizmos.color = Color.magenta;
-            Gizmos.DrawLine(transform.position + Vector3.up * 0.4f, currentTargetVein.transform.position + Vector3.up * 0.4f);
+            Gizmos.DrawLine(
+                transform.position + Vector3.up * 0.4f,
+                currentTargetVein.transform.position + Vector3.up * 0.4f
+            );
         }
     }
 }
