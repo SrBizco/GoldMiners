@@ -16,6 +16,7 @@ public class PathfindingManager : MonoBehaviour
     [Header("Layers")]
     [SerializeField] private LayerMask terrainLayerMask;
     [SerializeField] private LayerMask obstacleLayerMask;
+    [SerializeField] private LayerMask defaultGroundLayer;
 
     [Header("Terrain Costs")]
     [SerializeField] private List<TerrainLayerData> terrainLayers = new List<TerrainLayerData>();
@@ -29,6 +30,7 @@ public class PathfindingManager : MonoBehaviour
     [SerializeField] private bool drawConnections = true;
     [SerializeField] private bool drawOnlyWalkableNodes = true;
     [SerializeField] private float gizmoSphereRadius = 0.12f;
+    [SerializeField] private bool logTerrainSampling = false;
 
     private readonly List<PathNode> nodes = new List<PathNode>();
 
@@ -67,10 +69,22 @@ public class PathfindingManager : MonoBehaviour
             {
                 Vector3 rayOrigin = new Vector3(x, raycastHeight, z);
 
-                if (!Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hitInfo, raycastHeight * 2f, terrainLayerMask))
+                RaycastHit[] hits = Physics.RaycastAll(
+                    rayOrigin,
+                    Vector3.down,
+                    raycastHeight * 2f,
+                    terrainLayerMask,
+                    QueryTriggerInteraction.Collide
+                );
+
+                RaycastHit? selectedTerrainHit = GetPreferredTerrainHit(hits);
+
+                if (!selectedTerrainHit.HasValue)
                 {
                     continue;
                 }
+
+                RaycastHit hitInfo = selectedTerrainHit.Value;
 
                 Vector3 nodePosition = hitInfo.point + Vector3.up * 0.05f;
                 bool isBlocked = Physics.CheckSphere(nodePosition, obstacleCheckRadius, obstacleLayerMask);
@@ -87,7 +101,7 @@ public class PathfindingManager : MonoBehaviour
                     continue;
                 }
 
-                float nodeCost = GetTerrainCost(hitInfo.collider.tag);
+                float nodeCost = GetTerrainCost(hitInfo.collider.gameObject.layer);
                 PathNode newNode = new PathNode(nodePosition, nodeCost);
                 nodes.Add(newNode);
             }
@@ -136,17 +150,126 @@ public class PathfindingManager : MonoBehaviour
         return strategy.CreatePath(startNode, targetNode, nodes);
     }
 
-    private float GetTerrainCost(string terrainTag)
+    public float GetTerrainCost(int terrainLayerNumber)
     {
         for (int i = 0; i < terrainLayers.Count; i++)
         {
-            if (terrainLayers[i].TagName == terrainTag)
+            if (terrainLayers[i].MatchesLayer(terrainLayerNumber))
             {
                 return terrainLayers[i].CostMultiplier;
             }
         }
 
         return 1f;
+    }
+
+    public float GetTerrainSpeedMultiplier(int terrainLayerNumber)
+    {
+        for (int i = 0; i < terrainLayers.Count; i++)
+        {
+            if (terrainLayers[i].MatchesLayer(terrainLayerNumber))
+            {
+                return terrainLayers[i].SpeedMultiplier;
+            }
+        }
+
+        return 1f;
+    }
+
+    public float SampleTerrainSpeedMultiplier(Vector3 worldPosition, float sampleHeight = 2f, float maxDistance = 10f)
+    {
+        Vector3 rayOrigin = worldPosition + Vector3.up * sampleHeight;
+
+        RaycastHit[] hits = Physics.RaycastAll(
+            rayOrigin,
+            Vector3.down,
+            maxDistance,
+            terrainLayerMask,
+            QueryTriggerInteraction.Collide
+        );
+
+        RaycastHit? selectedTerrainHit = GetPreferredTerrainHit(hits);
+
+        if (!selectedTerrainHit.HasValue)
+        {
+            if (logTerrainSampling)
+            {
+                Debug.Log("[PathfindingManager] No terrain hit found under agent.");
+            }
+
+            return 1f;
+        }
+
+        RaycastHit selectedHit = selectedTerrainHit.Value;
+        int selectedLayer = selectedHit.collider.gameObject.layer;
+        float selectedSpeedMultiplier = GetTerrainSpeedMultiplier(selectedLayer);
+
+        if (logTerrainSampling)
+        {
+            Debug.Log(
+                $"[PathfindingManager] Terrain sampled: {selectedHit.collider.name} | " +
+                $"Layer: {LayerMask.LayerToName(selectedLayer)} | " +
+                $"SpeedMultiplier: {selectedSpeedMultiplier}"
+            );
+        }
+
+        return selectedSpeedMultiplier;
+    }
+
+    private RaycastHit? GetPreferredTerrainHit(RaycastHit[] hits)
+    {
+        if (hits == null || hits.Length == 0)
+        {
+            return null;
+        }
+
+        Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        List<RaycastHit> nonDefaultHits = new List<RaycastHit>();
+        List<RaycastHit> defaultHits = new List<RaycastHit>();
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            RaycastHit hit = hits[i];
+            int hitLayer = hit.collider.gameObject.layer;
+
+            if (IsDefaultGroundLayer(hitLayer))
+            {
+                defaultHits.Add(hit);
+            }
+            else
+            {
+                nonDefaultHits.Add(hit);
+            }
+        }
+
+        if (nonDefaultHits.Count > 0)
+        {
+            RaycastHit bestHit = nonDefaultHits[0];
+            float bestSpeedMultiplier = GetTerrainSpeedMultiplier(bestHit.collider.gameObject.layer);
+
+            for (int i = 1; i < nonDefaultHits.Count; i++)
+            {
+                RaycastHit candidateHit = nonDefaultHits[i];
+                float candidateSpeedMultiplier = GetTerrainSpeedMultiplier(candidateHit.collider.gameObject.layer);
+
+                if (candidateSpeedMultiplier < bestSpeedMultiplier)
+                {
+                    bestHit = candidateHit;
+                    bestSpeedMultiplier = candidateSpeedMultiplier;
+                }
+            }
+
+            return bestHit;
+        }
+
+        return defaultHits.Count > 0 ? defaultHits[0] : hits[0];
+    }
+
+    private bool IsDefaultGroundLayer(int layerNumber)
+    {
+        int layerMask = 1 << layerNumber;
+        return (defaultGroundLayer.value & layerMask) != 0;
     }
 
     private void ConnectAdjacentNodes()

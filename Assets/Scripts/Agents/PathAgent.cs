@@ -11,14 +11,22 @@ public class PathAgent : MonoBehaviour
     [SerializeField] private float rotationSpeed = 360f;
     [SerializeField] private float nodeReachDistance = 0.1f;
 
+    [Header("Terrain Sampling")]
+    [SerializeField] private float terrainSampleHeight = 2f;
+    [SerializeField] private float terrainSampleDistance = 10f;
+
     [Header("Debug")]
     [SerializeField] private bool drawCurrentPath = true;
     [SerializeField] private bool logRecalculation = false;
+    [SerializeField] private bool logCurrentSpeed = false;
+
+    private readonly Dictionary<int, float> externalSpeedModifiers = new Dictionary<int, float>();
 
     private List<PathNode> currentPath = new List<PathNode>();
     private int currentPathIndex;
     private bool hasDestination;
     private Vector3 currentWorldDestination;
+    private float currentMovementSpeed;
 
     public bool HasReachedDestination { get; private set; } = true;
     public bool HasDestination => hasDestination;
@@ -27,6 +35,11 @@ public class PathAgent : MonoBehaviour
     public PathfindingStrategyType CurrentStrategy => pathfindingManager != null
         ? pathfindingManager.CurrentStrategy
         : PathfindingStrategyType.BreadthFirst;
+
+    private void Awake()
+    {
+        currentMovementSpeed = movementSpeed;
+    }
 
     private void OnEnable()
     {
@@ -42,10 +55,14 @@ public class PathAgent : MonoBehaviour
         {
             pathfindingManager.StrategyChanged -= OnStrategyChanged;
         }
+
+        externalSpeedModifiers.Clear();
+        currentMovementSpeed = movementSpeed;
     }
 
     private void Update()
     {
+        UpdateCurrentMovementSpeed();
         MoveAlongPath();
     }
 
@@ -119,6 +136,48 @@ public class PathAgent : MonoBehaviour
         }
     }
 
+    public void ApplySpeedModifier(int sourceId, float speedMultiplier)
+    {
+        float clampedMultiplier = Mathf.Clamp(speedMultiplier, 0.05f, 1f);
+        externalSpeedModifiers[sourceId] = clampedMultiplier;
+    }
+
+    public void RemoveSpeedModifier(int sourceId)
+    {
+        externalSpeedModifiers.Remove(sourceId);
+    }
+
+    private void UpdateCurrentMovementSpeed()
+    {
+        float terrainMultiplier = 1f;
+
+        if (pathfindingManager != null)
+        {
+            terrainMultiplier = pathfindingManager.SampleTerrainSpeedMultiplier(
+                transform.position,
+                terrainSampleHeight,
+                terrainSampleDistance
+            );
+        }
+
+        float externalMultiplier = 1f;
+
+        foreach (KeyValuePair<int, float> modifier in externalSpeedModifiers)
+        {
+            if (modifier.Value < externalMultiplier)
+            {
+                externalMultiplier = modifier.Value;
+            }
+        }
+
+        currentMovementSpeed = movementSpeed * terrainMultiplier * externalMultiplier;
+
+        if (logCurrentSpeed)
+        {
+            Debug.Log($"[{name}] Current speed: {currentMovementSpeed}");
+        }
+    }
+
     private void MoveAlongPath()
     {
         if (!hasDestination || HasReachedDestination)
@@ -163,7 +222,7 @@ public class PathAgent : MonoBehaviour
         Vector3 newPosition = Vector3.MoveTowards(
             transform.position,
             flatTargetPosition,
-            movementSpeed * Time.deltaTime
+            currentMovementSpeed * Time.deltaTime
         );
 
         if (moveDirection.sqrMagnitude > 0.0001f)

@@ -5,7 +5,7 @@ public class MinerController : MonoBehaviour
     [Header("References")]
     [SerializeField] private PathAgent pathAgent;
     [SerializeField] private BaseStorage baseStorage;
-    [SerializeField] private GoldVein[] goldVeins;
+    [SerializeField] private GoldVeinManager goldVeinManager;
 
     [Header("Mining Settings")]
     [SerializeField] private int carryCapacity = 5;
@@ -50,6 +50,16 @@ public class MinerController : MonoBehaviour
 
     private void Awake()
     {
+        if (goldVeinManager == null)
+        {
+            goldVeinManager = GoldVeinManager.Instance;
+
+            if (goldVeinManager == null)
+            {
+                goldVeinManager = FindFirstObjectByType<GoldVeinManager>();
+            }
+        }
+
         InitializeStates();
     }
 
@@ -103,38 +113,23 @@ public class MinerController : MonoBehaviour
 
     public GoldVein FindBestAvailableVein()
     {
-        GoldVein bestVein = null;
-        float bestDistance = float.MaxValue;
-
-        for (int i = 0; i < goldVeins.Length; i++)
+        if (goldVeinManager == null)
         {
-            GoldVein vein = goldVeins[i];
+            goldVeinManager = GoldVeinManager.Instance;
 
-            if (vein == null)
+            if (goldVeinManager == null)
             {
-                continue;
-            }
-
-            if (!vein.IsAvailableFor(this))
-            {
-                continue;
-            }
-
-            if (!vein.HasGold)
-            {
-                continue;
-            }
-
-            float distance = Vector3.Distance(transform.position, vein.transform.position);
-
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                bestVein = vein;
+                goldVeinManager = FindFirstObjectByType<GoldVeinManager>();
             }
         }
 
-        return bestVein;
+        if (goldVeinManager == null)
+        {
+            Debug.LogWarning($"[{name}] No GoldVeinManager assigned or found in scene.");
+            return null;
+        }
+
+        return goldVeinManager.FindBestAvailableVein(this, transform.position);
     }
 
     public void SetCurrentTargetVein(GoldVein vein)

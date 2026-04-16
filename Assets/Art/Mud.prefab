@@ -23,7 +23,7 @@ GameObject:
   - component: {fileID: 23687773866774576}
   - component: {fileID: 64872444070982798}
   m_Layer: 0
-  m_Name: SM_Env_Dirt_Skirt_01
+  m_Name: Mud
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

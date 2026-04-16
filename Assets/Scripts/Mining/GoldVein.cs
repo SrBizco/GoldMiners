@@ -12,6 +12,28 @@ public class GoldVein : MonoBehaviour
     public bool IsReserved => reservedBy != null;
     public MinerController ReservedBy => reservedBy;
 
+    private void OnEnable()
+    {
+        if (GoldVeinManager.Instance != null)
+        {
+            GoldVeinManager.Instance.RegisterVein(this);
+        }
+        else
+        {
+            Debug.LogWarning($"[GoldVein] No GoldVeinManager found when enabling vein: {name}");
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (GoldVeinManager.Instance != null)
+        {
+            GoldVeinManager.Instance.UnregisterVein(this);
+        }
+
+        reservedBy = null;
+    }
+
     public bool IsAvailableFor(MinerController miner)
     {
         if (!HasGold)
