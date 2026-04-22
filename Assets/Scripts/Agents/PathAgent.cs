@@ -72,6 +72,14 @@ public class PathAgent : MonoBehaviour
         RecalculatePathToCurrentDestination();
     }
 
+    public void StopMovement()
+    {
+        currentPath.Clear();
+        currentPathIndex = 0;
+        hasDestination = false;
+        HasReachedDestination = true;
+    }
+
     private void OnStrategyChanged(PathfindingStrategyType newStrategy)
     {
         if (!hasDestination || HasReachedDestination)
@@ -115,6 +123,8 @@ public class PathAgent : MonoBehaviour
             HasReachedDestination = true;
             return;
         }
+
+        Debug.Log(pathfindingManager.BuildPathDebugSummary(newPath));
 
         currentPath = newPath;
         currentPathIndex = 0;

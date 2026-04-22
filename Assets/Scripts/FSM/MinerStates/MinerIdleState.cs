@@ -7,6 +7,12 @@ public class MinerIdleState : MinerStateBase
 
     public override void OnUpdate()
     {
+        if (Owner.ShouldFlee())
+        {
+            Owner.ChangeState(Owner.FleeState);
+            return;
+        }
+
         if (Owner.IsCarryFull)
         {
             Owner.ChangeState(Owner.ReturnToBaseState);

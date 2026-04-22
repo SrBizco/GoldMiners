@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 64565293515943242}
   - component: {fileID: 2540469067284129145}
   m_Layer: 0
-  m_Name: SM_Generic_Tree_04
+  m_Name: Tree
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

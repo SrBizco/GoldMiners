@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 
 public class PathfindingManager : MonoBehaviour
@@ -31,6 +32,7 @@ public class PathfindingManager : MonoBehaviour
     [SerializeField] private bool drawOnlyWalkableNodes = true;
     [SerializeField] private float gizmoSphereRadius = 0.12f;
     [SerializeField] private bool logTerrainSampling = false;
+    [SerializeField] private bool logNodeGenerationSummary = true;
 
     private readonly List<PathNode> nodes = new List<PathNode>();
 
@@ -57,6 +59,8 @@ public class PathfindingManager : MonoBehaviour
             Debug.LogWarning("[PathfindingManager] Bounds not assigned.");
             return;
         }
+
+        Dictionary<string, int> generatedNodesByLayer = new Dictionary<string, int>();
 
         float startX = Mathf.Min(lowerLeftBound.position.x, upperRightBound.position.x);
         float endX = Mathf.Max(lowerLeftBound.position.x, upperRightBound.position.x);
@@ -101,15 +105,41 @@ public class PathfindingManager : MonoBehaviour
                     continue;
                 }
 
-                float nodeCost = GetTerrainCost(hitInfo.collider.gameObject.layer);
+                int terrainLayerNumber = hitInfo.collider.gameObject.layer;
+                float nodeCost = GetTerrainCost(terrainLayerNumber);
                 PathNode newNode = new PathNode(nodePosition, nodeCost);
                 nodes.Add(newNode);
+
+                string terrainLayerName = LayerMask.LayerToName(terrainLayerNumber);
+
+                if (!generatedNodesByLayer.ContainsKey(terrainLayerName))
+                {
+                    generatedNodesByLayer[terrainLayerName] = 0;
+                }
+
+                generatedNodesByLayer[terrainLayerName]++;
             }
         }
 
         ConnectAdjacentNodes();
 
-        Debug.Log($"[PathfindingManager] Nodes generated: {nodes.Count}");
+
+        if (logNodeGenerationSummary)
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.AppendLine("[PathfindingManager] Node generation summary:");
+
+            foreach (KeyValuePair<string, int> pair in generatedNodesByLayer)
+            {
+                builder.Append("- ");
+                builder.Append(pair.Key);
+                builder.Append(": ");
+                builder.Append(pair.Value);
+                builder.AppendLine(" nodes");
+            }
+
+            Debug.Log(builder.ToString());
+        }
     }
 
     public void SetPathfindingStrategy(PathfindingStrategyType strategyType)
@@ -214,6 +244,97 @@ public class PathfindingManager : MonoBehaviour
         }
 
         return selectedSpeedMultiplier;
+    }
+
+    public string BuildPathDebugSummary(List<PathNode> path)
+    {
+        if (path == null || path.Count == 0)
+        {
+            return "[PathfindingManager] Path summary: empty path";
+        }
+
+        float totalCost = 0f;
+        Dictionary<string, int> nodesByTerrain = new Dictionary<string, int>();
+        Dictionary<float, int> nodesByCost = new Dictionary<float, int>();
+
+        for (int i = 0; i < path.Count; i++)
+        {
+            PathNode node = path[i];
+
+            if (i > 0)
+            {
+                totalCost += PathfindingUtils.GetTraversalCost(path[i - 1], node);
+            }
+
+            string terrainName = GetTerrainLayerNameAtPosition(node.Position);
+
+            if (!nodesByTerrain.ContainsKey(terrainName))
+            {
+                nodesByTerrain[terrainName] = 0;
+            }
+
+            nodesByTerrain[terrainName]++;
+
+            if (!nodesByCost.ContainsKey(node.CostMultiplier))
+            {
+                nodesByCost[node.CostMultiplier] = 0;
+            }
+
+            nodesByCost[node.CostMultiplier]++;
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.AppendLine("[PathfindingManager] Path summary:");
+        builder.Append("Strategy: ");
+        builder.AppendLine(CurrentStrategy.ToString());
+        builder.Append("Node count: ");
+        builder.AppendLine(path.Count.ToString());
+        builder.Append("Estimated total cost: ");
+        builder.AppendLine(totalCost.ToString("F2"));
+
+        builder.AppendLine("Nodes by terrain:");
+        foreach (KeyValuePair<string, int> pair in nodesByTerrain)
+        {
+            builder.Append("- ");
+            builder.Append(pair.Key);
+            builder.Append(": ");
+            builder.Append(pair.Value);
+            builder.AppendLine();
+        }
+
+        builder.AppendLine("Nodes by cost:");
+        foreach (KeyValuePair<float, int> pair in nodesByCost)
+        {
+            builder.Append("- Cost ");
+            builder.Append(pair.Key);
+            builder.Append(": ");
+            builder.Append(pair.Value);
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
+    }
+
+    private string GetTerrainLayerNameAtPosition(Vector3 worldPosition)
+    {
+        Vector3 rayOrigin = worldPosition + Vector3.up * 2f;
+
+        RaycastHit[] hits = Physics.RaycastAll(
+            rayOrigin,
+            Vector3.down,
+            10f,
+            terrainLayerMask,
+            QueryTriggerInteraction.Collide
+        );
+
+        RaycastHit? selectedTerrainHit = GetPreferredTerrainHit(hits);
+
+        if (!selectedTerrainHit.HasValue)
+        {
+            return "Unknown";
+        }
+
+        return LayerMask.LayerToName(selectedTerrainHit.Value.collider.gameObject.layer);
     }
 
     private RaycastHit? GetPreferredTerrainHit(RaycastHit[] hits)

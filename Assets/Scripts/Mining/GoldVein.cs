@@ -6,6 +6,8 @@ public class GoldVein : MonoBehaviour
     [SerializeField] private int currentGoldAmount = 20;
 
     private MinerController reservedBy;
+    private GoldVeinManager cachedManager;
+    private bool isRegistered;
 
     public int CurrentGoldAmount => currentGoldAmount;
     public bool HasGold => currentGoldAmount > 0;
@@ -14,24 +16,75 @@ public class GoldVein : MonoBehaviour
 
     private void OnEnable()
     {
-        if (GoldVeinManager.Instance != null)
-        {
-            GoldVeinManager.Instance.RegisterVein(this);
-        }
-        else
-        {
-            Debug.LogWarning($"[GoldVein] No GoldVeinManager found when enabling vein: {name}");
-        }
+        TryRegister();
+    }
+
+    private void Start()
+    {
+        TryRegister();
     }
 
     private void OnDisable()
     {
-        if (GoldVeinManager.Instance != null)
+        Unregister();
+        reservedBy = null;
+    }
+
+    private void OnDestroy()
+    {
+        Unregister();
+    }
+
+    private void TryRegister()
+    {
+        if (isRegistered)
         {
-            GoldVeinManager.Instance.UnregisterVein(this);
+            return;
         }
 
-        reservedBy = null;
+        if (cachedManager == null)
+        {
+            cachedManager = GoldVeinManager.Instance;
+
+            if (cachedManager == null)
+            {
+                cachedManager = FindFirstObjectByType<GoldVeinManager>();
+            }
+        }
+
+        if (cachedManager == null)
+        {
+            Debug.LogWarning($"[GoldVein] No GoldVeinManager found for vein: {name}");
+            return;
+        }
+
+        cachedManager.RegisterVein(this);
+        isRegistered = true;
+    }
+
+    private void Unregister()
+    {
+        if (!isRegistered)
+        {
+            return;
+        }
+
+        if (cachedManager == null)
+        {
+            cachedManager = GoldVeinManager.Instance;
+
+            if (cachedManager == null)
+            {
+                cachedManager = FindFirstObjectByType<GoldVeinManager>();
+            }
+        }
+
+        if (cachedManager != null)
+        {
+            cachedManager.UnregisterVein(this);
+        }
+
+        isRegistered = false;
     }
 
     public bool IsAvailableFor(MinerController miner)
@@ -82,6 +135,12 @@ public class GoldVein : MonoBehaviour
 
         int extractedAmount = Mathf.Min(requestedAmount, currentGoldAmount);
         currentGoldAmount -= extractedAmount;
+
+        if (currentGoldAmount <= 0)
+        {
+            currentGoldAmount = 0;
+            Destroy(gameObject);
+        }
 
         return extractedAmount;
     }

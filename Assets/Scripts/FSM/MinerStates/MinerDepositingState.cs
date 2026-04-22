@@ -8,6 +8,12 @@ public class MinerDepositingState : MinerStateBase
 
     public override void OnUpdate()
     {
+        if (Owner.ShouldFlee())
+        {
+            Owner.ChangeState(Owner.FleeState);
+            return;
+        }
+
         if (!Owner.HasCarriedGold)
         {
             Owner.ChangeState(Owner.IdleState);

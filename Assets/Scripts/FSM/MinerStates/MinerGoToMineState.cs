@@ -7,6 +7,12 @@ public class MinerGoToMineState : MinerStateBase
 
     public override void OnUpdate()
     {
+        if (Owner.ShouldFlee())
+        {
+            Owner.ChangeState(Owner.FleeState);
+            return;
+        }
+
         GoldVein targetVein = Owner.CurrentTargetVein;
 
         if (targetVein == null)
@@ -26,9 +32,5 @@ public class MinerGoToMineState : MinerStateBase
         {
             Owner.ChangeState(Owner.MiningState);
         }
-    }
-
-    public override void OnExit()
-    {
     }
 }

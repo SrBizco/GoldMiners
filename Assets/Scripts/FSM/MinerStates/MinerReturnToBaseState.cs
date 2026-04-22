@@ -8,8 +8,9 @@ public class MinerReturnToBaseState : MinerStateBase
 
     public override void OnUpdate()
     {
-        if (Owner.BaseStorage == null)
+        if (Owner.ShouldFlee())
         {
+            Owner.ChangeState(Owner.FleeState);
             return;
         }
 

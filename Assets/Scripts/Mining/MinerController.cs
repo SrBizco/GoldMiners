@@ -13,6 +13,12 @@ public class MinerController : MonoBehaviour
     [SerializeField] private float miningInterval = 1f;
     [SerializeField] private float depositInterval = 0.5f;
 
+    [Header("Threat")]
+    [SerializeField] private float safeDuration = 3f;
+
+    [Header("Health")]
+    [SerializeField] private int maxHealth = 10;
+
     [Header("UI")]
     [SerializeField] private string displayName = "Miner";
 
@@ -26,10 +32,17 @@ public class MinerController : MonoBehaviour
     private MinerMiningState miningState;
     private MinerReturnToBaseState returnToBaseState;
     private MinerDepositingState depositingState;
+    private MinerFleeState fleeState;
+    private MinerSafeState safeState;
+    private MinerDeadState deadState;
 
     private GoldVein currentTargetVein;
     private int carriedGold;
     private float actionTimer;
+    private int currentHealth;
+    private bool isDead;
+    private bool isInSafeZone;
+    private EnemyController currentThreat;
 
     public PathAgent PathAgent => pathAgent;
     public BaseStorage BaseStorage => baseStorage;
@@ -39,6 +52,12 @@ public class MinerController : MonoBehaviour
     public int CarryCapacity => carryCapacity;
     public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? name : displayName;
 
+    public int CurrentHealth => currentHealth;
+    public int MaxHealth => maxHealth;
+    public bool IsDead => isDead;
+    public bool IsInSafeZone => isInSafeZone;
+    public EnemyController CurrentThreat => currentThreat;
+
     public bool HasCarriedGold => carriedGold > 0;
     public bool IsCarryFull => carriedGold >= carryCapacity;
 
@@ -47,6 +66,9 @@ public class MinerController : MonoBehaviour
     public MinerMiningState MiningState => miningState;
     public MinerReturnToBaseState ReturnToBaseState => returnToBaseState;
     public MinerDepositingState DepositingState => depositingState;
+    public MinerFleeState FleeState => fleeState;
+    public MinerSafeState SafeState => safeState;
+    public MinerDeadState DeadState => deadState;
 
     private void Awake()
     {
@@ -60,6 +82,7 @@ public class MinerController : MonoBehaviour
             }
         }
 
+        currentHealth = maxHealth;
         InitializeStates();
     }
 
@@ -85,12 +108,18 @@ public class MinerController : MonoBehaviour
         miningState = new MinerMiningState();
         returnToBaseState = new MinerReturnToBaseState();
         depositingState = new MinerDepositingState();
+        fleeState = new MinerFleeState();
+        safeState = new MinerSafeState();
+        deadState = new MinerDeadState();
 
         idleState.Initialize(this);
         goToMineState.Initialize(this);
         miningState.Initialize(this);
         returnToBaseState.Initialize(this);
         depositingState.Initialize(this);
+        fleeState.Initialize(this);
+        safeState.Initialize(this);
+        deadState.Initialize(this);
 
         fsm = new FiniteStateMachine<MinerController>();
         fsm.SetInitialState(idleState);
@@ -111,8 +140,100 @@ public class MinerController : MonoBehaviour
         Debug.Log($"[{name}] State changed to: {stateName}");
     }
 
+    public void SetSafeZoneStatus(bool value)
+    {
+        isInSafeZone = value;
+    }
+
+    public bool HasActiveThreat()
+    {
+        if (isDead)
+        {
+            return false;
+        }
+
+        return currentThreat != null;
+    }
+
+    public bool ShouldFlee()
+    {
+        if (isDead || isInSafeZone)
+        {
+            return false;
+        }
+
+        return HasActiveThreat();
+    }
+
+    public void ClearThreat()
+    {
+        currentThreat = null;
+    }
+
+    public bool HasReachedSafeDuration()
+    {
+        return actionTimer >= safeDuration;
+    }
+
+    public void TakeDamage(int damage)
+    {
+        TakeDamage(damage, null);
+    }
+
+    public void TakeDamage(int damage, EnemyController attacker)
+    {
+        if (isDead || isInSafeZone || damage <= 0)
+        {
+            return;
+        }
+
+        if (attacker != null)
+        {
+            currentThreat = attacker;
+        }
+
+        currentHealth -= damage;
+
+        if (currentHealth <= 0)
+        {
+            currentHealth = 0;
+            ChangeState(deadState);
+            return;
+        }
+
+        if (!(fleeState.Equals(null)) && !(safeState.Equals(null)))
+        {
+            if (fsm != null && !ReferenceEquals(fleeState, deadState))
+            {
+                ChangeState(fleeState);
+            }
+        }
+    }
+
+    public void HandleDeath()
+    {
+        if (isDead)
+        {
+            return;
+        }
+
+        isDead = true;
+        ReleaseReservationIfNeeded();
+        ClearThreat();
+
+        if (pathAgent != null)
+        {
+            pathAgent.StopMovement();
+        }
+    }
+
     public GoldVein FindBestAvailableVein()
     {
+        if (isDead)
+        {
+            return null;
+        }
+
         if (goldVeinManager == null)
         {
             goldVeinManager = GoldVeinManager.Instance;
@@ -170,7 +291,7 @@ public class MinerController : MonoBehaviour
 
     public void GoToBase()
     {
-        if (baseStorage == null)
+        if (isDead || baseStorage == null)
         {
             return;
         }
@@ -180,7 +301,7 @@ public class MinerController : MonoBehaviour
 
     public void TryMineOneUnit()
     {
-        if (currentTargetVein == null)
+        if (isDead || currentTargetVein == null)
         {
             return;
         }
@@ -201,7 +322,7 @@ public class MinerController : MonoBehaviour
 
     public void DepositOneUnitToBase()
     {
-        if (baseStorage == null)
+        if (isDead || baseStorage == null)
         {
             return;
         }
@@ -245,6 +366,7 @@ public class MinerController : MonoBehaviour
         if (currentTargetVein != null)
         {
             currentTargetVein.ReleaseReservation(this);
+            currentTargetVein = null;
         }
     }
 
