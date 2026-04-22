@@ -2,6 +2,8 @@ public class MinerSafeState : MinerStateBase
 {
     public override void OnEnter()
     {
+        Owner.AnimationController?.SetFleeing(false);
+        Owner.AnimationController?.SetChopping(false);
         Owner.PathAgent.StopMovement();
         Owner.ResetActionTimer();
         Owner.NotifyStateEntered(StateName);

@@ -124,8 +124,6 @@ public class PathAgent : MonoBehaviour
             return;
         }
 
-        Debug.Log(pathfindingManager.BuildPathDebugSummary(newPath));
-
         currentPath = newPath;
         currentPathIndex = 0;
         hasDestination = true;

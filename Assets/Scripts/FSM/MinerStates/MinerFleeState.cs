@@ -2,6 +2,8 @@ public class MinerFleeState : MinerStateBase
 {
     public override void OnEnter()
     {
+        Owner.AnimationController?.SetChopping(false);
+        Owner.AnimationController?.SetFleeing(true);
         Owner.ClearCurrentTargetVein();
         Owner.GoToBase();
         Owner.NotifyStateEntered(StateName);
@@ -24,5 +26,10 @@ public class MinerFleeState : MinerStateBase
         {
             Owner.GoToBase();
         }
+    }
+
+    public override void OnExit()
+    {
+        Owner.AnimationController?.SetFleeing(false);
     }
 }

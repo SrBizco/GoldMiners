@@ -6,6 +6,7 @@ public class MinerController : MonoBehaviour
     [SerializeField] private PathAgent pathAgent;
     [SerializeField] private BaseStorage baseStorage;
     [SerializeField] private GoldVeinManager goldVeinManager;
+    [SerializeField] private MinerAnimationController animationController;
 
     [Header("Mining Settings")]
     [SerializeField] private int carryCapacity = 5;
@@ -44,9 +45,12 @@ public class MinerController : MonoBehaviour
     private bool isInSafeZone;
     private EnemyController currentThreat;
 
+    private Vector3 lastAnimationPosition;
+
     public PathAgent PathAgent => pathAgent;
     public BaseStorage BaseStorage => baseStorage;
     public GoldVein CurrentTargetVein => currentTargetVein;
+    public MinerAnimationController AnimationController => animationController;
 
     public int CarriedGold => carriedGold;
     public int CarryCapacity => carryCapacity;
@@ -82,13 +86,21 @@ public class MinerController : MonoBehaviour
             }
         }
 
+        if (animationController == null)
+        {
+            animationController = GetComponentInChildren<MinerAnimationController>();
+        }
+
         currentHealth = maxHealth;
+        lastAnimationPosition = transform.position;
+
         InitializeStates();
     }
 
     private void Update()
     {
         fsm?.Update();
+        UpdateAnimationParameters();
     }
 
     private void OnDisable()
@@ -201,13 +213,7 @@ public class MinerController : MonoBehaviour
             return;
         }
 
-        if (!(fleeState.Equals(null)) && !(safeState.Equals(null)))
-        {
-            if (fsm != null && !ReferenceEquals(fleeState, deadState))
-            {
-                ChangeState(fleeState);
-            }
-        }
+        ChangeState(fleeState);
     }
 
     public void HandleDeath()
@@ -359,6 +365,20 @@ public class MinerController : MonoBehaviour
     public bool HasReachedDepositInterval()
     {
         return actionTimer >= depositInterval;
+    }
+
+    private void UpdateAnimationParameters()
+    {
+        if (animationController == null)
+        {
+            return;
+        }
+
+        float speed = Vector3.Distance(transform.position, lastAnimationPosition) / Mathf.Max(Time.deltaTime, 0.0001f);
+        lastAnimationPosition = transform.position;
+
+        animationController.SetSpeed(speed);
+        animationController.SetDead(isDead);
     }
 
     private void ReleaseReservationIfNeeded()

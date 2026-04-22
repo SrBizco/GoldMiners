@@ -2,6 +2,8 @@ public class MinerIdleState : MinerStateBase
 {
     public override void OnEnter()
     {
+        Owner.AnimationController?.SetFleeing(false);
+        Owner.AnimationController?.SetChopping(false);
         Owner.NotifyStateEntered(StateName);
     }
 

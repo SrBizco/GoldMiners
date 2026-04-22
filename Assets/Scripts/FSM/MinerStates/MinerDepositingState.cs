@@ -2,6 +2,8 @@ public class MinerDepositingState : MinerStateBase
 {
     public override void OnEnter()
     {
+        Owner.AnimationController?.SetFleeing(false);
+        Owner.AnimationController?.SetChopping(false);
         Owner.ResetActionTimer();
         Owner.NotifyStateEntered(StateName);
     }

@@ -2,6 +2,7 @@ public class EnemyAttackState : EnemyStateBase
 {
     public override void OnEnter()
     {
+        Owner.AnimationController?.TriggerAttack();
         Owner.NotifyStateEntered(StateName);
         Owner.PathAgent.StopMovement();
         Owner.ResetAttackTimer();
@@ -21,7 +22,6 @@ public class EnemyAttackState : EnemyStateBase
         if (Owner.IsTargetInsideSafeZone())
         {
             Owner.ClearTarget();
-            Owner.PathAgent.StopMovement();
             Owner.ChangeState(Owner.ReturnState);
             return;
         }

@@ -2,6 +2,8 @@ public class MinerMiningState : MinerStateBase
 {
     public override void OnEnter()
     {
+        Owner.AnimationController?.SetFleeing(false);
+        Owner.AnimationController?.SetChopping(true);
         Owner.ResetActionTimer();
         Owner.NotifyStateEntered(StateName);
     }
@@ -60,5 +62,10 @@ public class MinerMiningState : MinerStateBase
             Owner.ClearCurrentTargetVein();
             Owner.ChangeState(Owner.ReturnToBaseState);
         }
+    }
+
+    public override void OnExit()
+    {
+        Owner.AnimationController?.SetChopping(false);
     }
 }

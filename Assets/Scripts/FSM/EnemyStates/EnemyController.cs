@@ -5,6 +5,7 @@ public class EnemyController : MonoBehaviour
     [Header("References")]
     [SerializeField] private PathAgent pathAgent;
     [SerializeField] private SafeZone safeZone;
+    [SerializeField] private EnemyAnimationController animationController;
 
     [Header("Detection")]
     [SerializeField] private float detectionRadius = 10f;
@@ -33,10 +34,12 @@ public class EnemyController : MonoBehaviour
     private Vector3 spawnPosition;
     private Vector3 lastRequestedTargetPosition;
     private bool hasRequestedTargetPosition;
+    private Vector3 lastAnimationPosition;
 
     public PathAgent PathAgent => pathAgent;
     public MinerController CurrentTarget => currentTarget;
     public Vector3 SpawnPosition => spawnPosition;
+    public EnemyAnimationController AnimationController => animationController;
 
     public EnemyIdleState IdleState => idleState;
     public EnemyChaseState ChaseState => chaseState;
@@ -50,13 +53,21 @@ public class EnemyController : MonoBehaviour
             safeZone = FindFirstObjectByType<SafeZone>();
         }
 
+        if (animationController == null)
+        {
+            animationController = GetComponentInChildren<EnemyAnimationController>();
+        }
+
         spawnPosition = transform.position;
+        lastAnimationPosition = transform.position;
+
         InitializeStates();
     }
 
     private void Update()
     {
         fsm?.Update();
+        UpdateAnimationParameters();
     }
 
     private void InitializeStates()
@@ -256,6 +267,20 @@ public class EnemyController : MonoBehaviour
         }
 
         attackTimer = 0f;
+        animationController?.TriggerAttack();
         currentTarget.TakeDamage(damagePerHit, this);
+    }
+
+    private void UpdateAnimationParameters()
+    {
+        if (animationController == null)
+        {
+            return;
+        }
+
+        float speed = Vector3.Distance(transform.position, lastAnimationPosition) / Mathf.Max(Time.deltaTime, 0.0001f);
+        lastAnimationPosition = transform.position;
+
+        animationController.SetSpeed(speed);
     }
 }

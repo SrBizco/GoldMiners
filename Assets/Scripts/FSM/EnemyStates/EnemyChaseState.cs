@@ -20,7 +20,6 @@ public class EnemyChaseState : EnemyStateBase
         if (Owner.IsTargetInsideSafeZone())
         {
             Owner.ClearTarget();
-            Owner.PathAgent.StopMovement();
             Owner.ChangeState(Owner.ReturnState);
             return;
         }

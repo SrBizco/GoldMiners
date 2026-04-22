@@ -11,9 +11,6 @@ public class EnemyReturnState : EnemyStateBase
         if (Owner.HasReachedSpawn())
         {
             Owner.ChangeState(Owner.IdleState);
-            return;
         }
-
-        Owner.UpdateReturnPath();
     }
 }

@@ -2,6 +2,8 @@ public class MinerReturnToBaseState : MinerStateBase
 {
     public override void OnEnter()
     {
+        Owner.AnimationController?.SetFleeing(false);
+        Owner.AnimationController?.SetChopping(false);
         Owner.GoToBase();
         Owner.NotifyStateEntered(StateName);
     }

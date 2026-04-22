@@ -2,6 +2,7 @@ public class MinerDeadState : MinerStateBase
 {
     public override void OnEnter()
     {
+        Owner.AnimationController?.SetDead(true);
         Owner.HandleDeath();
         Owner.NotifyStateEntered(StateName);
     }
